@@ -3,7 +3,7 @@
 
 
 
-const size_t REPS = 1e8;
+const size_t REPS = 1e7;
 const size_t N = 16;
 void standard_implementation(u_int64_t a[N], u_int64_t b[N]) {
     for (int i = 0; i < N; i++) {
@@ -43,10 +43,30 @@ void alternate_implementation(double a[N], double b[N]) {
 
 
 
-
-
 #ifdef __x86_64__
-#include "immintrin.h"
+#include <immintrin.h>
+    void simd_implementation(double a[N], double b[N]) {
+        const double c[] = {1 << 30, 1 << 30, 1 << 30, 1 << 30};
+        const __m256d vc = _mm256_load_pd(c);
+        __m256d va[N/4];
+        __m256d vb[N/4];
+
+        for (size_t i = 0; i < N; i+=4) {
+            va[i/4] = _mm256_loadu_pd(&a[i]);
+            vb[i/4] = _mm256_loadu_pd(&b[i]);
+        }
+
+        for (size_t r = 0; r < REPS; r++) {
+            for (size_t i = 0; i < N/4; i++) {
+                va[i] = _mm256_mul_pd(va[i], vc);
+                va[i] = _mm256_div_pd(va[i], vb[i]);
+            }
+        }
+
+        for(size_t i = 0; i < N; i += 4) {
+            _mm256_storeu_pd(&a[i], va[i/4]);
+        }
+    }
 #elif __ARM64_ARCH_8__
 #include <arm_neon.h>
     void simd_implementation(double a[N], double b[N]) {
@@ -61,7 +81,7 @@ void alternate_implementation(double a[N], double b[N]) {
         }
 
         for (size_t r = 0; r < REPS; r++) {
-            for (int i = 0; i < N/2; i++) {
+            for (size_t i = 0; i < N/2; i++) {
                 va[i] = vmulq_f64(va[i], vc);
                 va[i] = vdivq_f64(va[i], vb[i]);
             }
